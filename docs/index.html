@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador Â· Sistema de Seguridad Arduino R4 WiFi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>Sistema de Seguridad <span class="tag">Arduino UNO R4 WiFi</span></h1>
+    <p class="sub">Simulador y panel de control</p>
+  </div>
+  <div class="modo">
+    <button id="btnSim" class="activo">SimulaciÃ³n</button>
+    <button id="btnUsb">Conectar Arduino (USB)</button>
+    <span id="conexion" class="pill">Modo simulaciÃ³n</span>
+  </div>
+</header>
+
+<main>
+  <!-- ESTADO + DISPLAY -->
+  <section class="card estado-card">
+    <div id="estado" class="estado DESARMADO">DESARMADO</div>
+    <div class="display" id="display"></div>
+    <div id="causa" class="causa"></div>
+  </section>
+
+  <!-- CONTROLES DEL SISTEMA -->
+  <section class="card">
+    <h2>Control del sistema</h2>
+    <div class="botones">
+      <button class="verde" data-cmd="ARMAR">Armar</button>
+      <button class="rojo" data-cmd="PANICO">PÃ¡nico</button>
+    </div>
+    <div class="pin">
+      <input id="pin" type="password" inputmode="numeric" placeholder="PIN (1234)" maxlength="8">
+      <button id="btnDesarmar" class="azul">Desarmar</button>
+    </div>
+    <div class="teclado" id="teclado"></div>
+    <div class="botones">
+      <button data-cmd="CERRAR">Cerrar cerradura</button>
+      <button data-cmd="ABRIR">Abrir cerradura</button>
+      <button data-cmd="LASER ON">LÃ¡ser ON</button>
+      <button data-cmd="LASER OFF">LÃ¡ser OFF</button>
+    </div>
+    <label class="fila">Umbral ultrasonido: <b id="umbralTxt">50</b> cm
+      <input id="umbral" type="range" min="5" max="200" value="50">
+    </label>
+  </section>
+
+  <!-- ESCENA -->
+  <section class="card escena-card">
+    <h2>Ãrea vigilada <small id="escenaAyuda">(arrastra a la persona para simular un intruso)</small></h2>
+    <svg id="escena" viewBox="0 0 600 300">
+      <rect x="10" y="10" width="580" height="280" rx="10" class="piso"/>
+      <!-- puerta / cerradura -->
+      <g id="puerta">
+        <rect x="560" y="110" width="20" height="80" class="marco"/>
+        <rect id="pestillo" x="540" y="145" width="30" height="10" class="pestillo"/>
+        <text x="520" y="215" class="lbl">Cerradura</text>
+      </g>
+      <!-- PIR -->
+      <g>
+        <path id="conoPir" d="M40 40 L240 0 L240 300 Z" class="cono"/>
+        <circle cx="40" cy="40" r="14" id="pirLed" class="sensor"/>
+        <text x="20" y="75" class="lbl">PIR</text>
+      </g>
+      <!-- UltrasÃ³nico -->
+      <g>
+        <rect x="20" y="230" width="34" height="18" rx="3" class="sensor" id="usSensor"/>
+        <line id="usOnda" x1="54" y1="239" x2="300" y2="239" class="onda"/>
+        <text x="16" y="270" class="lbl">HC-SR04</text>
+      </g>
+      <!-- LÃ¡ser -->
+      <g>
+        <rect x="330" y="16" width="16" height="16" class="sensor"/>
+        <rect x="330" y="268" width="16" height="16" class="sensor" id="receptor"/>
+        <line id="haz" x1="338" y1="32" x2="338" y2="268" class="haz"/>
+        <text x="352" y="28" class="lbl">KY-008</text>
+        <text x="352" y="282" class="lbl">Receptor</text>
+      </g>
+      <!-- Buzzer -->
+      <g id="buzzer">
+        <circle cx="560" cy="45" r="16" class="sensor"/>
+        <text x="530" y="80" class="lbl">Buzzer</text>
+      </g>
+      <!-- Persona -->
+      <g id="persona" transform="translate(470,240)">
+        <circle cx="0" cy="-34" r="11" class="persona"/>
+        <rect x="-11" y="-22" width="22" height="36" rx="7" class="persona"/>
+      </g>
+    </svg>
+  </section>
+
+  <!-- SENSORES -->
+  <section class="card">
+    <h2>Sensores</h2>
+    <table class="tabla">
+      <tr><td>PIR (movimiento)</td><td id="sPir">â€”</td></tr>
+      <tr><td>Distancia (HC-SR04)</td><td id="sDist">â€”</td></tr>
+      <tr><td>LÃ¡ser</td><td id="sLaser">â€”</td></tr>
+      <tr><td>Haz lÃ¡ser</td><td id="sHaz">â€”</td></tr>
+      <tr><td>Cerradura (motor)</td><td id="sCerr">â€”</td></tr>
+      <tr><td>Buzzer</td><td id="sBuz">â€”</td></tr>
+    </table>
+    <div id="simControles">
+      <h3>Inyectar seÃ±ales (solo simulaciÃ³n)</h3>
+      <div class="botones">
+        <button id="btnMov">Movimiento PIR (3 s)</button>
+        <button id="btnHaz">Cortar haz lÃ¡ser (2 s)</button>
+      </div>
+      <label class="fila"><input type="checkbox" id="chkReceptor"> Tengo el receptor lÃ¡ser instalado</label>
+      <label class="fila"><input type="checkbox" id="chkSonido" checked> Sonido del buzzer</label>
+    </div>
+  </section>
+
+  <!-- EVENTOS -->
+  <section class="card eventos-card">
+    <h2>Registro de eventos <button id="btnLimpiar" class="mini">limpiar</button></h2>
+    <ol id="eventos"></ol>
+  </section>
+
+  <!-- CONEXIONES -->
+  <section class="card conexiones">
+    <h2>Conexiones al Arduino</h2>
+    <table class="tabla">
+      <tr><th>Componente</th><th>Pin del mÃ³dulo</th><th>Arduino R4</th></tr>
+      <tr><td>PIR HC-SR501</td><td>VCC / OUT / GND</td><td>5V / D2 / GND</td></tr>
+      <tr><td>Buzzer</td><td>+ / âˆ’</td><td>D3 / GND</td></tr>
+      <tr><td>HC-SR04</td><td>VCC / TRIG / ECHO / GND</td><td>5V / D4 / D5 / GND</td></tr>
+      <tr><td>L298N</td><td>ENA / IN1 / IN2 / GND</td><td>D6 / D7 / D8 / GND</td></tr>
+      <tr><td>L298N</td><td>12V / OUT1-OUT2</td><td>BaterÃ­a 7â€“12V (+) / Motor DC</td></tr>
+      <tr><td>LÃ¡ser KY-008</td><td>S / âˆ’ </td><td>D9 / GND</td></tr>
+      <tr><td>MAX7219</td><td>VCC / GND / DIN / CS / CLK</td><td>5V / GND / A1 / A2 / A3</td></tr>
+      <tr class="futuro"><td>Receptor lÃ¡ser</td><td>VCC / OUT / GND</td><td>5V / A0 / GND</td></tr>
+      <tr class="futuro"><td>RTC DS3231</td><td>VCC / GND / SDA / SCL</td><td>5V / GND / A4(SDA) / A5(SCL)</td></tr>
+      <tr class="futuro"><td>microSD</td><td>VCC / GND / CS / MOSI / MISO / SCK</td><td>5V / GND / D10 / D11 / D12 / D13</td></tr>
+      <tr class="futuro"><td>ESP32-CAM</td><td>5V / GND / U0R / U0T</td><td>5V / GND / D1(TX) / D0(RX)</td></tr>
+    </table>
+    <p class="nota">Las filas en gris son los componentes que todavÃ­a faltan.</p>
+  </section>
+</main>
+
+<footer>Proyecto escolar Â· Arduino UNO R4 WiFi Â· <a href="https://github.com/edwincedexab4356-boop/sistema-seguridad-r4">cÃ³digo en GitHub</a></footer>
+<script src="app.js"></script>
+</body>
+</html>
